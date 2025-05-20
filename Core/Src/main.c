@@ -61,7 +61,7 @@ static void MX_I2S1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+volatile uint8_t done = 0;
 /* USER CODE END 0 */
 
 /**
@@ -98,12 +98,22 @@ int main(void)
   MX_I2S1_Init();
   /* USER CODE BEGIN 2 */
 
+  uint16_t i2s_data[10]=
+  {
+    0,1,2,3,4,5,6,7,8,9
+  };
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  // HAL_I2S_Transmit(&hi2s1, i2s_data, 10,100);
+	  HAL_I2S_Transmit_DMA(&hi2s1, i2s_data, 10);
+	  while(!done) {
+	  }
+	  done = 0;
+	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -290,7 +300,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
+{
+	done = 1;
+}
 /* USER CODE END 4 */
 
 /**
