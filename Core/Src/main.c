@@ -18,11 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "wave_player.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "wave_player.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,7 +31,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define CPU_USAGE_SAMPLES 3
+#define CPU_USAGE_INTERVAL_MS 5000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,10 +44,22 @@
 I2S_HandleTypeDef hi2s1;
 DMA_HandleTypeDef hdma_spi1_tx;
 
+TIM_HandleTypeDef htim1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 extern uint8_t audio_file[];
+
+volatile uint32_t totalTimerCnt = 0;
+volatile uint16_t lastCnt = 0;
+
+volatile uint16_t isrCnt = 0;
+volatile uint32_t isrTimerCnt = 0;
+
+uint32_t cpuUsage[CPU_USAGE_SAMPLES];
+uint32_t cpuUsageSampleCounter = 0;
+uint32_t cpuUsageLastTick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,6 +68,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2S1_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -89,7 +102,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  SysTick_Config(SystemCoreClock / 1000);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -97,7 +110,9 @@ int main(void)
   MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2S1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start(&htim1);
   wave_player_init(&hi2s1);
   wave_player_start(audio_file);
 
@@ -107,6 +122,23 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	HAL_Delay(5);
+	const volatile uint16_t cnt = (uint16_t)htim1.Instance->CNT;
+	totalTimerCnt += (uint16_t)(cnt - lastCnt);
+	lastCnt = cnt;
+
+	const uint32_t tick = HAL_GetTick();
+	if (tick > cpuUsageLastTick + CPU_USAGE_INTERVAL_MS) {
+		cpuUsageLastTick = tick;
+
+		if (cpuUsageSampleCounter < CPU_USAGE_SAMPLES) {
+			cpuUsage[cpuUsageSampleCounter] = (isrTimerCnt * 100) / totalTimerCnt;
+			cpuUsageSampleCounter++;
+		}
+		else {
+			__NOP();
+		}
+	}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -189,6 +221,53 @@ static void MX_I2S1_Init(void)
   /* USER CODE BEGIN I2S1_Init 2 */
 
   /* USER CODE END I2S1_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 6400-1;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65535;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
 
 }
 
@@ -295,12 +374,16 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 {
+	isrCnt = (uint16_t)htim1.Instance->CNT;
 	wave_player_prepare_half_buffer(SECOND_HALF_OF_BUFFER);
+	isrTimerCnt += (uint16_t)(htim1.Instance->CNT - isrCnt);
 }
 
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hsai)
 {
+	isrCnt = (uint16_t)htim1.Instance->CNT;
 	wave_player_prepare_half_buffer(FIRST_HALF_OF_BUFFER);
+	isrTimerCnt += (uint16_t)(htim1.Instance->CNT - isrCnt);
 }
 /* USER CODE END 4 */
 
