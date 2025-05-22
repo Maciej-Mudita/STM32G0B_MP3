@@ -8,6 +8,7 @@
 #include "wave_player.h"
 #include "main.h"
 #include "wave_file.h"
+#include <string.h>
 
 #define AUDIO_BUFFER_SIZE			512
 #define BYTES_IN_AUDIO_BUFFER_SIZE	AUDIO_BUFFER_SIZE*2
@@ -110,20 +111,12 @@ void wave_player_prepare_half_buffer(uint8_t half_number)
 
 void wave_player_prepare_data(uint32_t start_address, uint32_t end_address)
 {
-	uint8_t audio_sample;
+	const uint32_t size = end_address - start_address;
 
-	for(int i = start_address; i < end_address; i++)
-	{
-		audio_sample = *(wave_player.data_pointer+wave_player.byte_counter);
-
-		wave_player.buffer[i] = audio_sample;
-		wave_player.byte_counter++;
-
-		if(wave_player.byte_counter >= 450000)//wave_player.file_hdr.wave_file_hdr.data_size)
-		{
-			// HAL_I2S_DMAPause(wave_player.hi2s);
-			wave_player.byte_counter = 100;
-			return;
-		}
+	if(wave_player.byte_counter + size >= 450000) {
+		wave_player.byte_counter = 0;
 	}
+
+	memcpy(&wave_player.buffer[start_address], wave_player.data_pointer + wave_player.byte_counter, size);
+	wave_player.byte_counter += size;
 }
