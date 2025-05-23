@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "wave_player.h"
+#include "mp3_player.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,8 +49,6 @@ TIM_HandleTypeDef htim1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-extern uint8_t audio_file[];
-
 volatile uint32_t totalTimerCnt = 0;
 volatile uint16_t lastCnt = 0;
 
@@ -113,9 +111,9 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim1);
-  wave_player_init(&hi2s1);
-  wave_player_start(audio_file);
 
+  mp3_player_init(&hi2s1);
+  mp3_player_start();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -375,16 +373,10 @@ static void MX_GPIO_Init(void)
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 {
 	isrCnt = (uint16_t)htim1.Instance->CNT;
-	wave_player_prepare_half_buffer(SECOND_HALF_OF_BUFFER);
+	mp3_player_end_stream_callback();
 	isrTimerCnt += (uint16_t)(htim1.Instance->CNT - isrCnt);
 }
 
-void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hsai)
-{
-	isrCnt = (uint16_t)htim1.Instance->CNT;
-	wave_player_prepare_half_buffer(FIRST_HALF_OF_BUFFER);
-	isrTimerCnt += (uint16_t)(htim1.Instance->CNT - isrCnt);
-}
 /* USER CODE END 4 */
 
 /**
